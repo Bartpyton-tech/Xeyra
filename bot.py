@@ -7,21 +7,21 @@ import logging
 from flask import Flask
 import threading
 
-# ===== LOGI =====
+# ========= LOGI =========
 logging.basicConfig(level=logging.INFO)
 
-# ===== ENV =====
+# ========= ENV =========
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 
-# ===== INTENTS =====
+# ========= DISCORD =========
 intents = discord.Intents.default()
 intents.guilds = True
 
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 
-# ===== FLASK (RENDER) =====
+# ========= RENDER / FLASK =========
 app = Flask(__name__)
 
 @app.route("/")
@@ -34,17 +34,10 @@ def run_web():
 
 threading.Thread(target=run_web).start()
 
-# ===== GUILD =====
-GUILD_ID = 1410955423648845825  # <-- ID SERWERA
+# ========= USTAWIENIA =========
+GUILD_ID = 1410955423648845825  # <<< ID TWOJEGO SERWERA
 
-# ===== READY =====
-@client.event
-async def on_ready():
-    guild = discord.Object(id=GUILD_ID)
-    await tree.sync(guild=guild)
-    logging.info(f"Zalogowano jako {client.user}")
-
-# ===== VIEW Z PRZYCISKIEM =====
+# ========= VIEW Z PRZYCISKIEM =========
 class RollbackView(View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -52,54 +45,66 @@ class RollbackView(View):
     @discord.ui.button(
         label="Utwórz kanał",
         style=discord.ButtonStyle.primary,
-        emoji="➕"
+        emoji="🛠️"
     )
     async def create_channel(self, interaction: discord.Interaction, button: Button):
-
         guild = interaction.guild
         member = interaction.user
 
-        # 👉 PRAWDZIWA NAZWA Z DISCORDA (nick > username)
-        display_name = member.display_name.lower().replace(" ", "-")
+        channel_name = f"rollback-{member.name}".lower()
 
-        channel_name = f"rollback-{display_name}"
-
-        # sprawdź czy kanał już istnieje
+        # SPRAWDŹ CZY JUŻ ISTNIEJE
         existing = discord.utils.get(guild.text_channels, name=channel_name)
         if existing:
             await interaction.response.send_message(
-                f"❌ Kanał **{channel_name}** już istnieje.",
+                f"Masz już kanał {existing.mention}",
                 ephemeral=True
             )
             return
 
-        channel = await guild.create_text_channel(channel_name)
+        # ===== PRYWATNE UPRAWNIENIA =====
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(view_channel=False),
+            member: discord.PermissionOverwrite(
+                view_channel=True,
+                send_messages=True,
+                read_message_history=True
+            ),
+            guild.me: discord.PermissionOverwrite(view_channel=True)
+        }
 
-        await channel.send(
-            f"🎥 **Rollback dla {member.mention}**\n"
-            "Wrzuć tutaj klipa + timecodes."
+        channel = await guild.create_text_channel(
+            channel_name,
+            overwrites=overwrites
         )
 
         await interaction.response.send_message(
-            f"✅ Utworzono kanał {channel.mention}",
+            f"Utworzono kanał {channel.mention}",
             ephemeral=True
         )
 
-# ===== KOMENDA =====
+# ========= READY =========
+@client.event
+async def on_ready():
+    print("SYNC OK")
+    guild = discord.Object(id=GUILD_ID)
+    await tree.sync(guild=guild)
+    logging.info(f"Zalogowano jako {client.user}")
+
+# ========= KOMENDA =========
 @tree.command(
     name="rollbackstworz",
-    description="Tworzy rollback z przyciskiem",
+    description="Tworzy prywatny kanał rollback",
     guild=discord.Object(id=GUILD_ID)
 )
 async def rollbackstworz(interaction: discord.Interaction):
-
     embed = discord.Embed(
         title="🔧 Rollback",
         description=(
             "**Na czym polega rollback?**\n"
-            "Tworzysz kanał, wrzucasz klipa + timecodes,\n"
-            "a my pomagamy Ci się poprawić.\n\n"
-            "**Kliknij przycisk poniżej, aby utworzyć kanał.**"
+            "Rollback służy do analizy gry i poprawy umiejętności.\n\n"
+            "**Jak wysłać klipa?**\n"
+            "Wrzuć pełne nagranie + timecodes z fightami."
         ),
         color=0x7B3FE4
     )
@@ -109,8 +114,9 @@ async def rollbackstworz(interaction: discord.Interaction):
         view=RollbackView()
     )
 
-# ===== START =====
+# ========= START =========
 client.run(TOKEN)
+
 
 
 
