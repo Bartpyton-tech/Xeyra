@@ -3,23 +3,22 @@ from discord import app_commands
 import os
 from dotenv import load_dotenv
 import logging
+from flask import Flask
+import threading
 
+# LOGI
 logging.basicConfig(level=logging.INFO)
 
+# ENV
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 
+# DISCORD
 intents = discord.Intents.default()
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 
-@client.event
-async def on_ready():
-    await tree.sync()
-    logging.info(f"Zalogowano jako {client.user}")
-from flask import Flask
-import threading
-
+# FLASK (PORT DLA RENDER)
 app = Flask(__name__)
 
 @app.route("/")
@@ -29,8 +28,21 @@ def home():
 def run_web():
     app.run(host="0.0.0.0", port=8080)
 
-client.run(TOKEN)
-@tree.command(name="rollbackstworz", description="Tworzy kanał rollback i wysyła instrukcję")
+# START FLASK W OSOBNYM WĄTKU
+threading.Thread(target=run_web).start()
+
+# READY
+@client.event
+async def on_ready():
+    guild = discord.Object(id=1410955423648845825)
+    await tree.sync(guild=guild)
+    logging.info(f"Zalogowano jako {client.user}")
+
+# KOMENDA
+@tree.command(
+    name="rollbackstworz",
+    description="Tworzy kanał rollback i wysyła instrukcję"
+)
 async def rollbackstworz(interaction: discord.Interaction):
     embed = discord.Embed(
         title="🔧 Rollback",
@@ -50,4 +62,7 @@ async def rollbackstworz(interaction: discord.Interaction):
     )
 
     await interaction.response.send_message(embed=embed)
+
+# START BOTA
+client.run(TOKEN)
 
