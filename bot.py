@@ -1,5 +1,6 @@
 import discord
 from discord import app_commands
+from discord.ui import View, Button
 import os
 from dotenv import load_dotenv
 import logging
@@ -13,14 +14,14 @@ logging.basicConfig(level=logging.INFO)
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 
-# ===== INTENTS (KLUCZOWE) =====
+# ===== INTENTS =====
 intents = discord.Intents.default()
-intents.guilds = True  # <<< BEZ TEGO SLASH NIE DZIAŁAJĄ
+intents.guilds = True
 
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 
-# ===== FLASK (PORT DLA RENDER) =====
+# ===== FLASK (RENDER) =====
 app = Flask(__name__)
 
 @app.route("/")
@@ -33,42 +34,84 @@ def run_web():
 
 threading.Thread(target=run_web).start()
 
-# ===== READY =====
-GUILD_ID = 1410955423648845825  # <<< TWOJE ID SERWERA
+# ===== GUILD =====
+GUILD_ID = 1410955423648845825  # <-- ID SERWERA
 
+# ===== READY =====
 @client.event
 async def on_ready():
     guild = discord.Object(id=GUILD_ID)
     await tree.sync(guild=guild)
     logging.info(f"Zalogowano jako {client.user}")
 
+# ===== VIEW Z PRZYCISKIEM =====
+class RollbackView(View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(
+        label="Utwórz kanał",
+        style=discord.ButtonStyle.primary,
+        emoji="➕"
+    )
+    async def create_channel(self, interaction: discord.Interaction, button: Button):
+
+        guild = interaction.guild
+        member = interaction.user
+
+        # 👉 PRAWDZIWA NAZWA Z DISCORDA (nick > username)
+        display_name = member.display_name.lower().replace(" ", "-")
+
+        channel_name = f"rollback-{display_name}"
+
+        # sprawdź czy kanał już istnieje
+        existing = discord.utils.get(guild.text_channels, name=channel_name)
+        if existing:
+            await interaction.response.send_message(
+                f"❌ Kanał **{channel_name}** już istnieje.",
+                ephemeral=True
+            )
+            return
+
+        channel = await guild.create_text_channel(channel_name)
+
+        await channel.send(
+            f"🎥 **Rollback dla {member.mention}**\n"
+            "Wrzuć tutaj klipa + timecodes."
+        )
+
+        await interaction.response.send_message(
+            f"✅ Utworzono kanał {channel.mention}",
+            ephemeral=True
+        )
+
 # ===== KOMENDA =====
 @tree.command(
     name="rollbackstworz",
-    description="Tworzy kanał rollback i wysyła instrukcję",
+    description="Tworzy rollback z przyciskiem",
     guild=discord.Object(id=GUILD_ID)
 )
 async def rollbackstworz(interaction: discord.Interaction):
+
     embed = discord.Embed(
         title="🔧 Rollback",
         description=(
-            "**Na czym i co ma na celu stworzenie rollbacka?**\n"
-            "Tworzycie rollbacka tylko z myślą o to, żeby polepszyć swoje "
-            "umiejętności gry, razem z zarządem będziemy dokładnie analizować "
-            "wysyłane przez was klipy i podpowiadać wam co mogliście zrobić "
-            "lepiej aby jak najszybciej progresować.\n\n"
-            "**Jak macie wysłać poprawnie klipa?**\n"
-            "Aby poprawnie wysłać klipa musicie wstawić całe nagranie "
-            "z np. MCL na swój stworzony kanał wraz "
-            "z rozpisanymi timecodes."
+            "**Na czym polega rollback?**\n"
+            "Tworzysz kanał, wrzucasz klipa + timecodes,\n"
+            "a my pomagamy Ci się poprawić.\n\n"
+            "**Kliknij przycisk poniżej, aby utworzyć kanał.**"
         ),
         color=0x7B3FE4
     )
 
-    await interaction.response.send_message(embed=embed)
+    await interaction.response.send_message(
+        embed=embed,
+        view=RollbackView()
+    )
 
 # ===== START =====
 client.run(TOKEN)
+
 
 
 
