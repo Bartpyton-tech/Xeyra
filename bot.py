@@ -7,21 +7,21 @@ import logging
 from flask import Flask
 import threading
 
-# ===== LOGI =====
+# ========= LOGI =========
 logging.basicConfig(level=logging.INFO)
 
-# ===== ENV =====
+# ========= ENV =========
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 
-# ===== DISCORD =====
+# ========= DISCORD =========
 intents = discord.Intents.default()
 intents.guilds = True
 
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 
-# ===== RENDER / PORT =====
+# ========= RENDER / PORT =========
 app = Flask(__name__)
 
 @app.route("/")
@@ -32,12 +32,13 @@ def run_web():
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
 
-threading.Thread(target=run_web).start()
+threading.Thread(target=run_web, daemon=True).start()
 
-# ===== USTAWIENIA =====
+# ========= USTAWIENIA =========
 GUILD_ID = 1410955423648845825  # <-- ID SERWERA
+CATEGORY_NAME = "Rollbacks"
 
-# ===== VIEW =====
+# ========= VIEW =========
 class RollbackView(View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -51,10 +52,7 @@ class RollbackView(View):
         guild = interaction.guild
         member = interaction.user
 
-        channel_name = f"rollback-{member.name}".lower()
-
-        # SZUKAMY KATEGORII
-        category = discord.utils.get(guild.categories, name="Rollbacks")
+        category = discord.utils.get(guild.categories, name=CATEGORY_NAME)
         if not category:
             await interaction.response.send_message(
                 "❌ Brak kategorii **Rollbacks**",
@@ -62,15 +60,15 @@ class RollbackView(View):
             )
             return
 
-        # CZY JUŻ ISTNIEJE
+        channel_name = f"rollback-{member.name}".lower()
+
         if discord.utils.get(category.text_channels, name=channel_name):
             await interaction.response.send_message(
-                "❌ Masz już rollback",
+                "❌ Masz już otwarty rollback",
                 ephemeral=True
             )
             return
 
-        # ===== PRYWATNE UPRAWNIENIA =====
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
             member: discord.PermissionOverwrite(
@@ -92,15 +90,14 @@ class RollbackView(View):
             ephemeral=True
         )
 
-# ===== READY =====
+# ========= READY =========
 @client.event
 async def on_ready():
     print("SYNC OK")
-    guild = discord.Object(id=GUILD_ID)
-    await tree.sync(guild=guild)
+    await tree.sync(guild=discord.Object(id=GUILD_ID))
     logging.info(f"Zalogowano jako {client.user}")
 
-# ===== KOMENDA =====
+# ========= KOMENDA =========
 @tree.command(
     name="rollbackstworz",
     description="Tworzy prywatny kanał rollback",
@@ -111,7 +108,7 @@ async def rollbackstworz(interaction: discord.Interaction):
         title="🔧 Rollback",
         description=(
             "**Na czym polega rollback?**\n"
-            "Kanał służy do analizy gry.\n\n"
+            "Kanał służy do analizy gry i poprawy umiejętności.\n\n"
             "**Jak wysłać klipa?**\n"
             "Pełne nagranie + timecodes."
         ),
@@ -123,8 +120,9 @@ async def rollbackstworz(interaction: discord.Interaction):
         view=RollbackView()
     )
 
-# ===== START =====
+# ========= START =========
 client.run(TOKEN)
+
 
 
 
